@@ -2,32 +2,40 @@
 
 * https://github.com/golang/go/wiki/CodeReviewComments
 * 2022/3/17時点
-* 逐語訳ではなく、意訳です。
+* 意訳です。正確な表現は原文をご参照ください。
+** 私の解釈が間違っている部分あれば、**優しく**指摘いただけると嬉しいです。
+* 基本的にDeepLで翻訳し、文章を整形しています。
 * 📝
 
 # Go Code Review Comments
 
-* Goコードのレビュー時によくあるコメントを集めたものです。
-** この資料を参照することで、説明を省くことができます。
-** この資料はよくある間違い集ではなく、包括的なスタイルガイドではありません。
-* link:https://go.dev/doc/effective_go[Effecrive Go]の補足資料としてご覧ください。
-* テストに関するその他のコメントは link:https://github.com/golang/go/wiki/TestComments[Go Test Comments]で見つけることができます。
-* このページを編集する前にissueを上げ、変更を話し合ってください。
-** 編集合戦をする場ではありません。
+このページは、Goコードのレビュー時によくあるコメントを集め、1つの詳細な説明を短縮して参照できるようにしたものです。
+これはよくある間違いリストであり、包括的なスタイルガイドではありません。
+
+link:https://go.dev/doc/effective_go[Effecrive Go] の補足としてご覧ください。
+
+テストに関するその他のコメントは link:https://github.com/golang/go/wiki/TestComments[Go Test Comments]で見ることができます。
+
+このページを編集する前に、たとえ些細なことでも変更について話し合ってください。
+多くの人が意見を持っており、ここは編集合戦をする場ではありません。
 
 ## Gofmt
 
-* link:https://pkg.go.dev/cmd/gofmt[gofmt]を使用すると、機械的にコードを整形することが可能です。
-** link:https://pkg.go.dev/golang.org/x/tools/cmd/goimports[goimports]を使用すると、gofmtの機能に加え、必要に応じてimport文を追加/削除してくれます。
-** 📝 vimの場合、link:https://github.com/mattn/vim-goimports[vim-goimports]のプラグインが便利
-* 以降では、gofmtで機械的に判断できない点について記述します。
+あなたのコードで link:https://pkg.go.dev/cmd/gofmt[gofmt] を実行すると、機械的に修正可能な問題の大部分を自動的に修正することができます。
+世の中のほとんどすべてのGoコードはgofmtを使用しています。
+以降の節では、機械的な修正可能な問題以外の点について説明します。
+
+gofmtの代わりに link:https://pkg.go.dev/golang.org/x/tools/cmd/goimports[goimports] を使用することもできます。
+goimports は gofmt のスーパーセットで、必要に応じて import 行を追加 (または削除) することができます。
+
+📝 vimの場合、link:https://github.com/mattn/vim-goimports[vim-goimports]のプラグインが便利
 
 ## Comment Sentences
 
-* link:https://go.dev/doc/effective_go#commentary[Effective Go:Commentary]を参照してください。
-* 宣言を文書化するコメントは冗長に見えても完全な文章であるべきです。
-** link:https://pkg.go.dev/golang.org/x/tools/cmd/godoc[godoc]を使用した時にうまくフォーマットされます。
-** コメントは宣言された名前で始まって、ピリオドで終わる必要があります。
+link:https://go.dev/doc/effective_go#commentary[Effective Go:Commentary]を参照してください。
+宣言を文書化するコメントは、多少冗長に見えても完全な文であるべきです。
+この方法を使用すると、link:https://pkg.go.dev/golang.org/x/tools/cmd/godoc[godoc]のドキュメントに変換する際に、フォーマットが上手くいきます。
+コメントは、宣言された名前で始まり、ピリオドで終わるべきです。
 
 ....
 // Request represents a request to run a command.
@@ -37,31 +45,30 @@ type Request struct { ...
 func Encode(w io.Writer, req *Request) { ...
 ....
 
-
 ## Contexts
 
-* 情報を伝達する際に link:https://github.com/golang/go/blob/master/src/context/context.go[context.Context]が使用される場合があります。
+context.Context型の値は、APIやプロセスの境界を越えて、セキュリティ認証情報、トレース情報、Deadlines、キャンセルシグナルを伝達します。
+Goプログラムでは、RPC や HTTP リクエストの受信から送信までの関数呼び出し流れ全体を通して、明示的にContextを渡します。
 
-
-
-* 基本的にContextは第一引数として指定する必要があります。
+Context を使用するほとんどの関数は、Contextを第一引数として指定する必要があります。
 
 ....
 func F(ctx context.Context, /* other arguments */) {}
 ....
 
-// TODO
+リクエスト固有ではない関数は、context.Background()を使用可能ですが、必要ないと思ってもContextを渡しておきましょう。
+デフォルトではContextを渡すことになっています。
+代案が間違いである明確な理由がある場合のみ、context.Backgroud()を使用してください。
 
-* NGなこと
-** 構造体のメンバにContextを追加すること
-*** 各メソッドにctxパラメータを追加してください。
-*** ただし、ライブラリ等のインターフェイスとシグネチャが一致しなければならないメソッドは例外です。
-** カスタマイズしたContext typeを作成すること
-*** または、関数のシグネチャにContext以外のインターフェイスを使用すること。
 
-* 使い方
-** Contextに追加する必要があるものであれば、Contextの値にデータを追加して伝搬させます。
-** Contextはimmutableなので使いまわしても大丈夫です。
+構造体型に Context メンバを追加するのではなく、その構造体型のメソッドに ctx パラメータを追加して、Context を渡す必要があります。
+ただし、標準ライブラリやサードパーティライブラリのインタフェースとシグネチャが一致しなければならないメソッドは例外です。
+
+カスタムのContext型を作ったり、関数のシグネチャにContext以外のインターフェイスを使ったりしないようにしましょう。
+
+アプリケーションのデータを渡す場合は、パラメータやレシーバ、グローバル、あるいはContextの値として渡すようにします。
+
+Contextはimmutableなので、同じDeadlines、キャンセル信号、資格情報、親トレースなどを共有する複数の呼び出しに同じctxを使用しても問題ありません。
 
 * 📝使用例 
 ** link:https://go.dev/play/p/fOHFnetmWrk[contextのset/get]
@@ -241,7 +248,7 @@ if !ok {
 	return fmt.Errorf("no value for %q", key)
 }
 return Parse(value)
-...
+....
 
 このルールはエクスポートされた関数に適用されますが、エクスポートされていない関数にも有効です。
 
@@ -632,7 +639,6 @@ i は sliceIndex とします。
 
 
 .
-
 
 
 
