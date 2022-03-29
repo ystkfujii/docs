@@ -77,22 +77,25 @@ Contextはimmutableなので、同じDeadlines、キャンセル信号、資格�
 
 ## Copying
 
-* 他のパッケージから構造体をコピーする場合は注意をする必要があります。
-** 予想外のエイリアシングが発生する場合があります。
-* 例えば、link:https://github.com/golang/go/blob/master/src/bytes/buffer.go[bytes.Burffer]は[]byteスライスを持っています。
-** Bufferをコピーすると、コピーのスライスが元の配列のエイリアスになり、その後のメソッド呼び出しに予想外の影響を与えます。
-* 一般的にポインタを持っている
-*** 📝たぶんこういうこと？ https://go.dev/play/p/6KUMLXpwgor
+予期せぬエイリアシングを避けるため、他のパッケージから構造体をコピーする際には注意が必要です。
+例えば、link:https://github.com/golang/go/blob/master/src/bytes/buffer.go[bytes.Burffer]型は `[]byteスライス`を含んでいます。
+`Buffer`をコピーすると、コピーのスライスが元の配列のエイリアスになり、
+その後のメソッド呼び出しが予期せぬ影響を与える可能性があります。
+
+* 📝たぶんこういうこと https://go.dev/play/p/6KUMLXpwgor
+
+一般的に、`T`型の値のメソッドがポインタ型である`*T`と関連付けられている場合は、コピーしないでください。
 
 ## Crypto Rand
 
-* キーを生成するために `math/rand` パッケージを使わないでください。
-** シードされていない場合、generatorは完全に予測可能です。
-** time.Nanoseconds()でシードした場合、ほんの数ビットのエントロピーがあります。
-** 代わりに`crypto/rand`のReaderを使用して、もしtextが必要なら、16進数かbase64で出力してください。
-https://go.dev/play/p/yGI1q6bKp9G
-** 雑感：Int63という定義なんてあるんだ、、、
-https://qiita.com/crifff/items/b116e6235fedcd18e0de
+鍵の生成に math/rand パッケージを使わないでください。
+シードされていない場合、ジェネレータは完全に予測可能です。
+time.Nanoseconds()でシードした場合、ほんの数ビットのエントロピーがあります。
+もしテキストが必要なら、16進数かbase64で出力しましょう。
+
+* 📝
+* randはseedが同じ https://cs.opensource.google/go/go/+/master:src/math/rand/rand.go;l=293
+* https://qiita.com/crifff/items/b116e6235fedcd18e0de
 
 ## Declaring Empty Slices
 
@@ -616,35 +619,5 @@ i は sliceIndex とします。
 メソッドのレシーバーは、1文字か2文字で十分です。
 ループインデックスやリーダなどの一般的な変数は、1文字（i, r）でよい。
 より変わったものやグローバル変数には、より説明的な名前が必要です。
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.
-
-
-
-
-
-
-
 
 
