@@ -1,0 +1,335 @@
+
+= Go Code Review Commentsざっくりまとめ
+
+
+== はじめに
+
+- https://github.com/golang/go/wiki/CodeReviewComments[CodeReviewComments]のざっくりまとめです
+- 極端に原書にないものは📝で書いてます
+- まさかりは優しく投げてください （っ'-')╮ =🪓
+
+== Go Code Review Comments
+
+* Goコードのレビュー時によくあるコメントを集めたものです
+** この資料を参照することで、説明を省くことができます
+** この資料はよくある間違い集であり、包括的なスタイルガイドではありません
+* link:https://go.dev/doc/effective_go[Effecrive Go]の補足資料としてご覧ください。
+* テストに関するその他のコメントは link:https://github.com/golang/go/wiki/TestComments[Go Test Comments]を見てください
+
+=== Gofmt
+
+* link:https://pkg.go.dev/cmd/gofmt[gofmt]を使用すると機械的なコード整形が可能
+** link:https://pkg.go.dev/golang.org/x/tools/cmd/goimports[goimports]を使用すると、gofmtの機能に加え、必要に応じてimport文を追加/削除が可能
+** 📝 vimの場合、link:https://github.com/mattn/vim-goimports[vim-goimports]のプラグインがある　[line-through]#vim-go#
+
+=== Comment Sentences
+
+* 基本的には、link:https://go.dev/doc/effective_go#commentary[Effective Go:Commentary]を参照するように
+* 宣言を文書化するコメントは冗長に見えても完全な文章であるべき
+** link:https://pkg.go.dev/golang.org/x/tools/cmd/godoc[godoc]を使用した時にうまくフォーマットされため
+** コメントは宣言された名前で始まりピリオドで終わる必要がある
+
+....
+// Request represents a request to run a command.
+type Request struct { ...
+
+// Encode writes the JSON encoding of req to w.
+func Encode(w io.Writer, req *Request) { ...
+....
+
+=== Contexts
+
+* 情報を伝達する際に link:https://github.com/golang/go/blob/master/src/context/context.go[context.Context]を使用するケースがある
+* 基本的には第一引数として指定する必要がある
+
+....
+func F(ctx context.Context, /* other arguments */) {}
+....
+
+* リクエスト固有ではなくても、基本的には受け取ったContextを使用するように
+** NGな理由がある場合のみcontext.Backgroud()を使用を検討するように
+* 構造体のメンバにcontextを含めるのはNG
+* contextをカスタマイズするのもNG
+* contextはimmutableなので、複数の呼び出しに同じcontextを使用してもOK
+
+* 📝使用例 
+** link:https://go.dev/play/p/fOHFnetmWrk[contextのset/get]
+** link:https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.11/pkg/log/log.go#L87-L102[controller-runtimeのlogger伝搬]
+** link:https://go.dev/play/p/oiOnzLuFKfK[キャンセルシグナルの伝搬]
+
+=== Copying
+
+* 構造体をコピーする際には注意するように
+** 予期しないエイリアシングが発生する可能性あるため
+** 📝 たぶんこういうこと link:https://go.dev/play/p/w5lpL_-nKic
+* 一般的に、`T` 型の値のメソッドがポインタ型である `*T` と関連付けられている場合のコピーはNG
+
+=== Crypto Rand
+
+* 鍵の生成に `math/rand` を使用してはいけない
+** Seed指定しない場合、完全に予測可能、
+*** 📝 https://cs.opensource.google/go/go/+/master:src/math/rand/rand.go;l=293
+** Seed指定しても大して違いはない
+* 代わりに `crypto/rand` を使用するように
+
+=== Declaring Empty Slices
+
+* 空のスライスを宣言する場合は、こっちより、
+....
+t := []string{}
+....
+
+こっちが良い
+....
+var t []string
+....
+
+* 後者はnil slice値を宣言し、前者はnon-nilで長さ0 slice値を宣言
+** 基本的に後者が好まれるが、jsonオブジェクトのエンコードなどでは全社が好ましい状況もある
+* インターフェースを設計する際には、両者を区別してはいけない
+* 📝https://go.dev/play/p/nxtFGoxtY51
+
+=== Doc Comments
+
+* エクスポートされた名前はdocコメントを持つべき、エクスポートされない型や関数の宣言もそうすべき
+** コメント規約についての詳細は https://go.dev/doc/effective_go#commentary を参照するように
+
+=== Dont't Panic
+
+* https://go.dev/doc/effective_go#errors を参照するように
+* 通常のエラー処理にはpanicではなく、errorと複数の戻り値を使用してください。
+
+=== Error Strings
+
+* Error文字列は、（固有名詞や頭字語で始まらない限り）大文字にするべきではなく、句読点で終わらせてはいけない
+** なぜなら、Error文字列は他のメッセージに結合されて表示されるから
+** e.g. `fmt.Errorf("Something bad")` ではなく `fmt.Errorf("Something bad")`
+* これはロギングはこのルールの対象外です。
+** ロギングは暗黙的に行指向で、他のメッセージの中で結合されることはありません。
+
+
+=== Examples
+
+* 新しいパッケージを追加する場合、意図した使い方の例として、実行可能なExampleを含めるように
+* 詳細は link:https://go.dev/blog/examples[testable Example() functions]を参照するように
+
+=== Goroutine Lifetimes
+
+* ゴルーチンを生成するときは、いつ終了するのか（したかどうか）を明確にするように
+* 不要になったゴルーチンは終了するように
+** メモリリーク、データ競合、メモリの過剰使用を招く可能性があるため
+* ゴルーチンの寿命が明らかになるように同時実行コードをシンプルに保つように
+** それが難しい場合は、ゴルーチンがいつ、なぜ終了するかを文書化するように
+
+=== Handle Errors
+
+* https://go.dev/doc/effective_go#errors を参照するように
+* エラーを _ 変数で捨てないように
+
+=== Imports
+
+* 名前の衝突を避ける場合を除いて、importsの名前を変更することは避けるように
+** 良いパッケージ名であれば、衝突は発生しないため
+** それでも衝突が発生する場合は、最もローカルな名前を変更するように
+* 標準ライブラリのグループを最初に記述し、グループ間に空行を入れるように
+....
+package main
+
+import (
+	"fmt"
+	"hash/adler32"
+	"os"
+
+	"appengine/foo"
+	"appengine/user"
+
+	"github.com/foo/bar"
+	"rsc.io/goversion/version"
+)
+....
+
+=== Import Blank
+
+* import _ "pkg" という構文は、プログラムのmainパッケージか、テストにおいてのみ使用するように
+
+=== Import Dot
+
+* import Dot形式は、循環参照が発生するためテスト対象にすることができないパッケージのテストに使用するように
+....
+package foo_test
+
+import (
+	"bar/testutil" // also imports "foo"
+	. "foo"
+)
+....
+=== In-Band Errors
+
+* 一般的に、関数は他の戻り値が有効であるかどうかを示す追加の値を返すべきです
+* 例
+
+こうではなく、
+....
+// Lookupはkeyに対応する値を返すが、keyに対応するマッピングがない場合は""を返す。
+func Lookup(key string) string
+...
+// in-band エラー値のチェックを怠ると、バグが発生する可能性があります。
+Parse(Lookup(key))  // "no value for key" ではなく "parse failure for value" を返す。
+....
+
+こうするべき
+....
+// Lookupはkeyに対応する値を返すか、keyに対応するマッピングがない場合はok=falseを返す。
+func Lookup(key string) (value string, ok bool)
+...
+Parse(Lookup(key))  // compile-time error
+....
+
+=== Indent Error Flow
+
+* 可読性向上のため、インデントは最小限にとどめるように
+** e.g.
+
+こうではなく、
+....
+if err != nil {
+	// error handling
+} else {
+	// normal code
+}
+....
+
+こうするべき
+....
+if err != nil {
+	// error handling
+	return // or continue, etc.
+}
+// normal code
+....
+
+=== Initialisms
+
+* 単語は頭文字以外、大文字と小文字を統一するように
+** e.g. urlとURLはOK、UrlはNG
+* ただし、protocol bufferによって生成されたコードは対象外
+
+=== Interfaces
+
+* インターフェイスを実装するパッケージは具象型（通常はポインタか構造体）を返しましょう
+** そうすれば、大規模なリファクタリングを必要とせずに、新しいメソッドを実装に追加が可能なため
+* モックのためにAPIの実装側でインターフェースを定義してはいけません
+** 替わりに実際に実装された公開APIからテストできるようなAPIを設計するように
+* 実際に使用される前にインターフェイスを定義しないように
+** 現実的な使用例がなければ、インターフェースが必要かどうか、ましてやどんなメソッドを含むべきかを確認するのはあまりにも困難なため
+** 原文: https://github.com/golang/go/wiki/CodeReviewComments#interfaces
+
+=== Line Length
+
+* Goのコードには厳格な行の長さの制限はありませんが、不快なほど長い行は避けるように
+* 行の意味によって改行をいれるように
+
+=== Mixed Caps
+
+* https://go.dev/doc/effective_go#mixed-caps を参照するように
+** 複数単語を書くときはアンダースコアを使用しない
+** e.g. unexported な定数はmaxLength であって MaxLength や MAX_LENGTH ではない
+
+=== Named Result Parameters
+
+* 簡略化した方がいい
+
+こっちより
+....
+func (n *Node) Parent1() (node *Node) {}
+func (n *Node) Parent2() (node *Node, err error) {}
+....
+
+こっちのほうがいい
+
+....
+func (n *Node) Parent1() *Node {}
+func (n *Node) Parent2() (*Node, error) {}
+....
+
+* ただし、パラメータが複数あり、ぱっと見て意味がくみ取れない場合、名前を付けたほうが良い場面もある。
+
+=== Naked Returns
+
+* 関数が数行であれば問題ないが、行数が多い場合戻り値は明示した方がよい。
+
+....
+func split(sum int) (x, y int) {
+	x = sum * 4 / 9
+	y = sum - x
+	return
+}
+....
+
+=== Package Comments
+
+* パッケージコメントは空行を入れずに記述する必要がある
+....
+// Package math provides basic constants and mathematical functions.
+package math
+....
+
+* パッケージコメントはパッケージ名で始まらなくてもよい
+* 最初の単語は大文字で始まらなければならない
+* https://go.dev/doc/effective_go#commentary も参照するように
+
+=== Pass Values
+
+* 数バイトの節約のために、関数の引数にポインタを渡すのはやめるように
+**  関数内で参照しかしない場合、その引数はポインタであってはなりません
+* ただし、大きな構造体には当てはまりません
+
+=== Receiver Names
+
+* その型を1文字か2文字で省略したものにするように
+** e.g. "Client" は "c" または "cl"
+** "me", "this", "self" のような一般的な名前は使わないように
+* メソッドで統一するように
+
+=== Receiver Type
+
+* receiver typeはpointerかvalueのどちらかで統一するように
+* receiverにpointerを使用した方が良い場合
+** pointerかvalueのどちらを使うかで迷った場合
+** メソッドがreceiverを編集する必要がある場合
+** receiverが大きすぎる構造体や配列の場合
+* receiverにvalueを使用した方が良い場合
+** receiverがmap、func、chanである場合 
+** receiverがsliceで、メソッドがresliceまたは再割り当てを行わない場合
+* 小さな不変値や構造体はvalue typeの方がいい場合もある
+
+=== Synchronous Functions
+
+* 非同期関数よりも同期関数を使用してください。
+** 同期関数とは、結果を直接返すかコールバックやチャンネル操作を終了してから返す関数のこと
+* 📝 たぶんこういうこと
+** 同期関数 https://go.dev/play/p/bYxawh2urFc
+** 非同期関数 https://go.dev/play/p/9yxLR6a1qqS
+
+=== Useful Test Failures
+
+* テスト失敗時のメッセージには、以下のような有益な情報を含めるように
+** 何が悪かったのか
+** どのような入力だったのか
+** 実際に何が得られたのか
+** 何が期待されのか
+* `actual != expected` の順で出力するように
+* 入力が多いようならlink:https://github.com/golang/go/wiki/TableDrivenTests[TableDrivenTests]を書くとよい
+* テストケース毎にTest関数を書くやり方もある
+....
+func TestSingleValue(t *testing.T) { testHelper(t, []int{80}) }
+func TestNoValues(t *testing.T)    { testHelper(t, []int{}) }
+....
+
+=== Variable Names
+
+* 変数名は短くしましょう。
+** 特にローカル変数は取り組みやすいです
+*** e.g. lineCount -> c、sliceIndex -> i ...
+* 宣言から離れた場所で使用される変数ほど説明的にしましょう
+
